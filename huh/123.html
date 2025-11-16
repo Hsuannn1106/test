@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>隨機選擇題 - 小測驗</title>
+  <style>
+    body{font-family: "Noto Sans TC", Arial, sans-serif; background:url('pic.jpg'); color:#111; padding:20px}
+    .container{max-width:900px;margin:0 auto;background:#fff;padding:24px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.06)}
+    h1{margin:0 0 12px;font-size:22px}
+    .controls{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+    input[type=number]{width:80px;padding:6px;border-radius:6px;border:1px solid #ddd}
+    button{padding:8px 12px;border-radius:8px;border:0;background:#2563eb;color:white;cursor:pointer}
+    .question-card{margin-top:18px;padding:18px;border-radius:10px;border:1px solid #eee;background:linear-gradient(180deg,#ffffff,#fbfdff)}
+    .options{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+    .option{padding:10px;border-radius:8px;border:1px solid #e6e6e6;cursor:pointer}
+    .option:hover{background:#f1f5ff}
+    .correct{background:#ecfdf5;border-color:#34d399}
+    .wrong{background:#fff1f2;border-color:#f87171}
+    .small{font-size:13px;color:#666}
+    .result{margin-top:16px;padding:12px;border-radius:8px;background:#f8fafc}
+    .controls .info{color:#555}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>隨機選擇題 (自動產生干擾選項)</h1>
+    <div class="controls">
+      <label>題數：<input id="count" type="number" min="1" max="67" value="10"></label>
+      <button id="startBtn">開始測驗</button>
+      <div class="info small">點選選項可立即顯示回答正確性；完成後會顯示分數。題目與答案來源為您提供的題庫，系統會從其他題目的正確答案抽取作為干擾選項。</div>
+    </div>
+
+    <div id="quizArea" style="display:none">
+      <div class="question-card">
+        <div id="progress" class="small">第 <span id="current">1</span> / <span id="total">10</span></div>
+        <h2 id="qtext" style="font-size:18px;margin-top:6px">題目文字</h2>
+        <div class="options" id="options"></div>
+        <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end">
+          <button id="nextBtn">下一題</button>
+        </div>
+      </div>
+      <div id="resultBox" class="result" style="display:none"></div>
+    </div>
+
+    <div id="finalBox" style="display:none;margin-top:14px">
+      <h3>測驗完成</h3>
+      <p id="finalScore"></p>
+      <button id="restart">重新開始</button>
+    </div>
+  </div>
+
+<script>
+// 原始題庫：題目與正確答案（來源為使用者提供）
+const rawQuestions = [
+  {q: '1. CoT 的主要特性 是什麼？', a: '分步推理'},
+  {q: '2. 哪一個優化器最常用於小型數據集與固定學習率的訓練？', a: 'SGD'},
+  {q: '3. 哪一個生成式 AI 平台具備整合文字、圖片與語音的能力？', a: 'Gemini'},
+  {q: '4. AdaGrad 優化器的缺點是？', a: '學習率衰減過快'},
+  {q: '5. GPT 與 BERT 的基礎架構是？', a: 'Transformer'},
+  {q: '6. 下列哪一項任務最適合使用 CoT？', a: '數學與邏輯推理'},
+  {q: '7. ROUGE 指標最常用於下列哪一任務？', a: '摘要生成'},
+  {q: '8. 在 Transformer 模型中，Self Attention 的功能是？', a: '理解語境與詞間關係'},
+  {q: '9. 在人工智慧中， CoT 是什麼的縮寫？', a: '思維鏈（Chain-of Thought）'},
+  {q: '10. 哪一種優化器適合處理長序列資料，如語音辨識？', a: 'RMSProp'},
+  {q: '11. 哪一種評估指標適用於文字翻譯品質檢驗？', a: 'BLEU'},
+  {q: '12. 下列哪一個元件負責語言模型的生成輸出？', a: '解碼器'},
+  {q: '13. 若要評估分類任務的表現，應使用下列哪一項指標？', a: 'F1 分數'},
+  {q: '14. 哪一個平台可讓使用者在雲端免費使用 GPU 進行 AI 實驗？', a: 'Google Colab'},
+  {q: '15. 哪一種提示語能有效觸發思維鏈（CoT）能力？', a: '請一步一步思考'},
+  {q: '16. 哪一個研究機構在 2022 年正式提出 CoT 技術？', a: 'Google Research'},
+  {q: '17. 哪一個教學策略最能引導學生觀察 AI 的推理過程？', a: '使用 CoT 提示語'},
+  {q: '18. 哪一個模型僅使用 Decoder 結構？', a: 'GPT'},
+  {q: '19. 下列哪一種優化器能動態調整學習率並結合動量？', a: 'Adam'},
+  {q: '20. MSE 是用於哪種類型的任務？', a: '回歸預測'},
+  {q: '21. 下列何者最能正確說明何謂 Prompt？', a: '提供 AI 指令與溝通的文字語句'},
+  {q: '22. Prompt 工程（Prompt Engineering）主要是指什麼？', a: '設計與優化給 AI 的提示語句'},
+  {q: '23. Prompt 流程的第一步驟是什麼？', a: '文字或詞句設計'},
+  {q: '24. 關於優化 Prompt 的重要性，下列敘述何者正確？', a: '清晰具體的 Prompt可以提升結果品質'},
+  {q: '25. 生成圖片時，下列哪一項不是好 Prompt 應具備的特點？', a: '簡單單字即可'},
+  {q: '26. 在文本生成中，Bad Prompt 容易產生什麼結果？', a: '語意模糊且錯誤'},
+  {q: '27. Prompt 工程的核心能力不包括下列何者？', a: '快速生成答案'},
+  {q: '28. 何者不是優化 Prompt 帶來的好處？', a: '完全取代模型訓練'},
+  {q: '29. 生成式 AI 常用的文字生成技術是什麼？', a: '自回歸模型'},
+  {q: '30. ChatGPT 使用哪一種模型架構？', a: 'Transformer'},
+  {q: '31. CoT 能夠幫助 AI 在解題時怎麼樣？', a: '逐步推理解釋過程'},
+  {q: '32. 下列何者屬於語言生成任務？', a: '摘要生成'},
+  {q: '33. 在使用 ChatGPT 時，加入哪一類指令可以增加生成結果的條理？', a: '請列出步驟'},
+  {q: '34. 為何 Adam 優化器能快速收斂？', a: '因為它使用動量與自動學習率調整'},
+  {q: '35. MSE 是什麼意思？', a: '均方誤差'},
+  {q: '36. 哪一項是自然語言生成中評估語意重疊的重要指標？', a: 'BLEU'},
+  {q: '37. 生成式 AI 常見於以下哪種應用？', a: '自動摘要'},
+  {q: '38. 自回歸模型的特點是？', a: '逐字產出並依序預測'},
+  {q: '39. 哪一項屬於跨模態 AI 應用？', a: '文字轉語音'},
+  {q: '40. 使用 Top-k 與 Top-p 控制生成結果的目的為何？', a: '控制輸出多樣性'},
+  {q: '41. 哪一種策略能讓模型保留不常見詞的學習？', a: 'AdaGrad'},
+  {q: '42. CoT 特別適合應用在？', a: '多步邏輯推理'},
+  {q: '43. 學習率（learning rate）的角色為？', a: '控制每次參數更新的幅度'},
+  {q: '44. Google 推出的 Gemini 屬於？', a: '多模態生成模型'},
+  {q: '45. 哪一項工具可自動生成學生學習單與教案？', a: 'MagicSchool'},
+  {q: '46. ChatGPT、 Claude、Gemini 皆屬於？', a: '自然語言處理 AI'},
+  {q: '47. Colab 實驗平台最適合用來？', a: '練習 Python 程式與 AI 模型'},
+  {q: '48. 在教育現場，使用 AI 輔助學習的最大挑戰之一是？', a: '缺乏教師引導與思辨訓練'},
+  {q: '49. 生成式 AI 中， Decoder 的功能是什麼？', a: '生成輸出序列'},
+  {q: '50. 哪一種技術可以幫助 AI 模型記住長期依賴資訊？', a: '注意力機制'},
+  {q: '51. 哪一項屬於自監督學習的應用？', a: '語言模型訓練'},
+  {q: '52. BLEU 指標的核心邏輯是什麼？', a: 'n-gram 重疊'},
+  {q: '53. 生成式 AI 中常用的溫度參數 temperature 用來？', a: '控制詞彙多樣性'},
+  {q: '54. 在生成文字時， top-p 控制機制的作用是？', a: '根據累積機率篩選詞彙'},
+  {q: '55. 若要減少模型過度學習特定資料，常用哪一技巧？', a: 'Dropout'},
+  {q: '56. 生成式 AI 最常使用哪一語言進行程式撰寫？', a: 'Python'},
+  {q: '57. 為什麼大型語言模型需大量資料訓練？', a: '提升通用語言理解能力'},
+  {q: '58. 當學生使用 AI 生成報告時，老師最應該強調？', a: '資料來源與理解'},
+  {q: '59. 哪一個項目能提升學生 Prompt 工具使用素養？', a: '練習輸入有邏輯的指令'},
+  {q: '60. 教師應如何引導學生與生成式 AI 共學？', a: '搭配思辨與批判'},
+  {q: '61. 評估學生使用 AI 寫作時的學習重點應是？', a: '語意掌握與反思'},
+  {q: '62. 學生在使用 AI 寫作後，應鼓勵其？', a: '進行修改與改寫'},
+  {q: '63. 教學上導入生成式 AI，有助於？', a: '個別化學習與表達'},
+  {q: '64. F1 分數是結合哪兩個指標的調和平均？', a: '精確率與召回率'},
+  {q: '65. Transformer 架構與 RNN 最大的不同是？', a: '支援並行運算'},
+  {q: '66. 在 AI 素養教育中，應培養學生？', a: '能理解與判讀 AI 輸出'},
+  {q: '67. 哪個技術能讓模型產出更具創意與多樣性的內容？', a: '高溫生成'}
+];
+
+// 建立答案池（所有正確答案的不重複集合），用於當作干擾選項來源
+const answerPool = Array.from(new Set(rawQuestions.map(x => x.a)));
+
+function shuffle(array){
+  for(let i=array.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));[array[i],array[j]]=[array[j],array[i]];
+  }
+}
+
+let quiz=[], currentIndex=0, userAnswers=[];
+
+function buildQuiz(n){
+  // 複製與隨機排序題目
+  const copy = rawQuestions.slice(); shuffle(copy);
+  quiz = copy.slice(0,n);
+  quiz.forEach(q=>{
+    // 取出正確答案，並從答案池抽兩個不同的干擾選項（若可用）
+    const correct = q.a;
+    const others = answerPool.filter(x=>x!==correct);
+    shuffle(others);
+    const distractors = others.slice(0,Math.min(2,others.length));
+    // 合成選項陣列並洗牌
+    q.options = [correct, ...distractors];
+    shuffle(q.options);
+    q.correctIndex = q.options.indexOf(correct);
+  });
+}
+
+function renderQuestion(idx){
+  const q = quiz[idx];
+  document.getElementById('current').textContent = idx+1;
+  document.getElementById('total').textContent = quiz.length;
+  document.getElementById('qtext').textContent = q.q;
+  const opts = document.getElementById('options'); opts.innerHTML='';
+  q.options.forEach((opt,i)=>{
+    const div = document.createElement('div');
+    div.className='option';
+    div.dataset.index = i;
+    div.innerHTML = `<strong>${String.fromCharCode(65+i)}.</strong> ${opt}`;
+    div.addEventListener('click', ()=> selectOption(i));
+    opts.appendChild(div);
+  });
+  // 隱藏下一題按鈕直到答題
+  document.getElementById('nextBtn').disabled = true;
+}
+
+function selectOption(i){
+  const q=quiz[currentIndex];
+  const optsEl = document.querySelectorAll('.option');
+  // 如果已經回答，忽略
+  if(userAnswers[currentIndex] != null) return;
+  userAnswers[currentIndex]=i;
+  optsEl.forEach((el,idx)=>{
+    if(idx===q.correctIndex){ el.classList.add('correct'); }
+    if(idx===i && i!==q.correctIndex){ el.classList.add('wrong'); }
+    el.style.pointerEvents='none';
+  });
+  // 顯示說明文字
+  const resBox = document.getElementById('resultBox');
+  resBox.style.display='block';
+  if(i===q.correctIndex){ resBox.textContent = '回答正確 ✅'; }
+  else{ resBox.textContent = `回答錯誤 ❌。正確答案：${String.fromCharCode(65+q.correctIndex)}. ${q.options[q.correctIndex]}` }
+  document.getElementById('nextBtn').disabled=false;
+}
+
+function showNext(){
+  currentIndex++;
+  document.getElementById('resultBox').style.display='none';
+  if(currentIndex<quiz.length){ renderQuestion(currentIndex); }
+  else{ finishQuiz(); }
+}
+
+function finishQuiz(){
+  const score = userAnswers.reduce((s,ans,idx)=> s + (ans===quiz[idx].correctIndex?1:0), 0);
+  document.getElementById('finalScore').textContent = `您答對 ${score} 題 / ${quiz.length} 題`;
+  document.getElementById('quizArea').style.display='none';
+  document.getElementById('finalBox').style.display='block';
+}
+
+// UI 綁定
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  const n = parseInt(document.getElementById('count').value) || 10;
+  const cap = Math.min(Math.max(n,1), rawQuestions.length);
+  buildQuiz(cap);
+  currentIndex=0; userAnswers = Array(cap).fill(null);
+  document.getElementById('quizArea').style.display='block';
+  document.getElementById('finalBox').style.display='none';
+  renderQuestion(0);
+});
+
+document.getElementById('nextBtn').addEventListener('click', ()=>{
+  showNext();
+});
+
+document.getElementById('restart').addEventListener('click', ()=>{
+  document.getElementById('quizArea').style.display='none';
+  document.getElementById('finalBox').style.display='none';
+});
+
+</script>
+</body>
+</html>
